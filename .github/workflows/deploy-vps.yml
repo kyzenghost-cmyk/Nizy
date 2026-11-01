@@ -95,7 +95,7 @@ jobs:
             cp /tmp/wa-guard-release/bot.js "$APP/bot.js.new"
             cp /tmp/wa-guard-release/package.json "$APP/package.json.new"
             node --check "$APP/bot.js.new"
-            node -e "const p=require('$APP/package.json.new'); if(!p.dependencies||!p.dependencies['@whiskeysockets/baileys']) process.exit(1)"
+            node -e "const p=JSON.parse(require('fs').readFileSync(process.argv[1],'utf8')); if(!p.dependencies||!p.dependencies['@whiskeysockets/baileys']) process.exit(1)" "$APP/package.json.new"
             cp "$APP/bot.js.new" "$APP/bot.js"
             cp "$APP/package.json.new" "$APP/package.json"
             cd "$APP"
