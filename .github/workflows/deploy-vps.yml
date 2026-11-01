@@ -1,0 +1,110 @@
+name: VPS connection and WA-GUARD deploy
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'bot.js'
+      - 'package.json'
+      - '.github/workflows/deploy-vps.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wa-guard-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deployment secrets
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          for name in SSH_HOST SSH_USER SSH_PRIVATE_KEY SSH_KNOWN_HOSTS; do
+            if [ -z "${!name}" ]; then echo "::error::Missing GitHub Actions secret: $name"; exit 1; fi
+          done
+
+      - name: Configure verified SSH
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Test VPS connection and prerequisites
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" '
+            set -eu
+            echo "SSH_OK"
+            id
+            test -d /home/micro/WA-GUARD
+            test -d /home/micro/WA-GUARD/auth/whatsapp
+            test -f /home/micro/WA-GUARD/.env
+            echo "PROJECT_AND_SESSION_PRESENT"
+            node --version
+            npm --version
+            command -v pm2 >/dev/null && pm2 describe WA-GUARD >/dev/null && echo "PM2_PROCESS_FOUND"
+            if ! grep -q "^TELEGRAM_ADMIN_ID=" /home/micro/WA-GUARD/.env; then
+              echo "DEPLOY_BLOCKED: TELEGRAM_ADMIN_ID is not configured in the VPS .env"
+              exit 23
+            fi
+          '
+
+      - name: Upload release without touching credentials
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          set -euo pipefail
+          tar --exclude='.git' --exclude='.env' --exclude='auth' --exclude='data' --exclude='node_modules' -czf /tmp/wa-guard-release.tgz .
+          scp -i ~/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes /tmp/wa-guard-release.tgz "$SSH_USER@$SSH_HOST:/tmp/wa-guard-release.tgz"
+
+      - name: Backup, validate and restart existing PM2 process
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/id_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" '
+            set -eu
+            APP=/home/micro/WA-GUARD
+            STAMP=$(date +%Y%m%d-%H%M%S)
+            mkdir -p "$APP/backups"
+            tar -czf "$APP/backups/pre-github-deploy-$STAMP.tgz" --exclude="node_modules" --exclude="auth/whatsapp" -C "$APP" .
+            mkdir -p /tmp/wa-guard-release
+            tar -xzf /tmp/wa-guard-release.tgz -C /tmp/wa-guard-release
+            cp /tmp/wa-guard-release/bot.js "$APP/bot.js.new"
+            cp /tmp/wa-guard-release/package.json "$APP/package.json.new"
+            node --check "$APP/bot.js.new"
+            node -e "const p=require('$APP/package.json.new'); if(!p.dependencies||!p.dependencies['@whiskeysockets/baileys']) process.exit(1)"
+            cp "$APP/bot.js.new" "$APP/bot.js"
+            cp "$APP/package.json.new" "$APP/package.json"
+            cd "$APP"
+            npm install --omit=dev
+            node --check bot.js
+            pm2 restart WA-GUARD --update-env
+            sleep 3
+            pm2 describe WA-GUARD >/dev/null
+            rm -f /tmp/wa-guard-release.tgz
+            rm -rf /tmp/wa-guard-release
+            echo "DEPLOY_OK"
+          '
