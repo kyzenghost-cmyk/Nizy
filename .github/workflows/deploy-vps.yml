@@ -89,7 +89,7 @@ jobs:
             APP=/home/micro/WA-GUARD
             STAMP=$(date +%Y%m%d-%H%M%S)
             mkdir -p "$APP/backups"
-            tar -czf "$APP/backups/pre-github-deploy-$STAMP.tgz" --exclude="node_modules" --exclude="auth/whatsapp" -C "$APP" .
+            tar -czf "$APP/backups/pre-github-deploy-$STAMP.tgz" --exclude="node_modules" -C "$APP" .
             mkdir -p /tmp/wa-guard-release
             tar -xzf /tmp/wa-guard-release.tgz -C /tmp/wa-guard-release
             cp /tmp/wa-guard-release/bot.js "$APP/bot.js.new"
