@@ -1,0 +1,6 @@
+node_modules/
+.env
+auth/whatsapp/**
+!auth/whatsapp/.gitkeep
+data/*.json
+*.log
