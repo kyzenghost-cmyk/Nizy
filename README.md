@@ -20,7 +20,7 @@ Este projeto é uma camada heurística de monitoramento, não um antivírus nem 
 - Acesso autorizado à conta WhatsApp que será pareada
 
 ```bash
-npm ci
+npm install
 cp .env.example .env
 nano .env
 npm test
