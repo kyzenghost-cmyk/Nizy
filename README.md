@@ -38,7 +38,9 @@ BOT_NAME=WA-GUARD
 Use o chat privado do administrador autorizado. Não publique o `.env`, a pasta `auth/whatsapp` nem os arquivos de sessão.
 
 ## Sessão e operação
-A autenticação é persistida em `auth/whatsapp`. **Nunca apague essa pasta para “corrigir” uma falha** sem entender o estado da sessão. Se o WhatsApp encerrar a sessão, será necessário novo pareamento oficial. Rode sob PM2 em produção e configure reinício automático.
+A autenticação é persistida em `auth/whatsapp`. **Nunca apague essa pasta para “corrigir” uma falha** sem entender o estado da sessão. Se o WhatsApp encerrar a sessão, será necessário novo pareamento official. Rode sob PM2 em produção e configure reinício automático.
 
 ## Testes
 `npm test` testa regras determinísticas do analisador. `npm run check` verifica sintaxe. Esses testes não substituem um teste real de pareamento, recebimento de mensagens e entrega de alertas, que exige credenciais e uma conta WhatsApp/Telegram controladas pelo operador.
+
+## kayzen é o melhor
