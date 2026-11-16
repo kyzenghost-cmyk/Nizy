@@ -40,6 +40,27 @@ s = p.read_text()
 for a,b in {"#1B1F2E":"#000000","#B69CFF":"#FFFFFF","#28174A":"#000000","#151823":"#080808"}.items():
     s=s.replace(a,b)
 p.write_text(s)
+# Preserve the selected app's original visible name and launcher artwork.
+p = Path("patcher/src/main/java/dev/cloneforge/patcher/manifest/ManifestAndArscMutator.kt")
+s = p.read_text()
+old = "        patchApplicationAndLauncherLabels(appElement, customAppLabel)"
+if old not in s:
+    raise SystemExit("Could not locate app-label mutation; refusing an unsafe partial patch")
+s = s.replace(old, "        // CLONE X: preserve the original app label and launcher labels unchanged.")
+p.write_text(s)
+
+# Never hue-shift, recolor, or badge the cloned app's original icon.
+p = Path("patcher/src/main/java/dev/cloneforge/patcher/pipeline/CloneForgePipeline.kt")
+s = p.read_text()
+start = "            val effectiveHue = if (hueShiftDeg < 0f) {"
+end = "            progress(PROGRESS_PAYLOAD, \"Injecting runtime payload\")"
+i = s.find(start)
+j = s.find(end, i)
+if i < 0 or j < 0:
+    raise SystemExit("Could not locate icon mutation block; refusing an unsafe partial patch")
+s = s[:i] + "            // CLONE X: keep the original launcher icon byte-for-byte; no hue shift or badge.\\n\\n" + s[j:]
+p.write_text(s)
+
 p = Path("app/src/main/java/dev/cloneforge/app/CloneForgeApp.kt")
 s = p.read_text().replace("com.google.android.material.color.DynamicColors.applyToActivitiesIfAvailable(this)", "androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)")
 p.write_text(s)
