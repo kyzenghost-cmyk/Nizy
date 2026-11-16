@@ -1,46 +1,27 @@
-# WA-GUARD
+# CLONE X
 
-Monitoramento de mensagens recebidas no WhatsApp via Baileys, com alertas e comandos de administração pelo Telegram.
+**CLONE X** é um aplicativo Android para gerar cópias instaláveis de aplicativos já presentes no aparelho. Cada cópia recebe outro identificador de pacote, instalação própria, ícone próprio e armazenamento privado separado pelo Android. Não usa contêiner de virtualização nem perfil de trabalho.
 
-## O que está implementado
-- Sessão WhatsApp persistida em `auth/whatsapp`.
-- Alertas de remetentes que não estão na lista confiável.
-- Sinais heurísticos de pedido de senha/código, pressão associada a Pix, iscas de prêmio, URLs HTTP, encurtadores, IPs literais e domínios punycode.
-- Detecção por metadados de extensões de anexos potencialmente executáveis; **nenhum anexo é baixado ou aberto**.
-- Lista manual de contatos confiáveis e bloqueados.
-- Comandos Telegram: `/status`, `/pause`, `/resume`, `/incidents`, `/trust +55...`, `/block +55...`.
-- Persistência local de listas, estado e incidentes em `data/`.
+## Compilação
 
-## Limites importantes
-Este projeto é uma camada heurística de monitoramento, não um antivírus nem uma garantia de impedir golpes, invasões ou banimentos. Alertas podem conter falsos positivos e falsos negativos. Mensagens de grupos são ignoradas. Pix isolado não é tratado como golpe. O bloqueio é manual; não há bloqueio automático de todo desconhecido. Recursos dependentes de suporte específico do WhatsApp/Baileys (privacidade de grupos e rejeição de chamadas) não são prometidos nesta versão.
+O GitHub Actions compila o APK automaticamente em cada envio para `main`. O artefato gerado chama-se **CLONE-X-APK**.
 
-## Requisitos e instalação
-- Node.js 20 ou superior
-- Um bot Telegram criado pelo usuário e seu token
-- Acesso autorizado à conta WhatsApp que será pareada
+1. Abra a aba **Actions** deste repositório.
+2. Entre na execução mais recente concluída.
+3. Baixe o artefato **CLONE-X-APK**.
 
-```bash
-npm install
-cp .env.example .env
-nano .env
-npm test
-npm run check
-npm start
-```
+## Requisitos e compatibilidade
 
-Configure no arquivo `.env`:
-```dotenv
-BOT_TOKEN=token_do_seu_bot_telegram
-TELEGRAM_ADMIN_ID=seu_id_numerico_do_telegram
-BOT_NAME=WA-GUARD
-```
+- Android 9 ou superior; a disponibilidade de recursos depende da versão e do fabricante.
+- O Android sempre apresenta a confirmação de instalação quando exigida pelo sistema.
+- Cópias são instalações separadas e começam com dados próprios.
+- A alteração do pacote e da assinatura pode impedir o funcionamento de apps que dependam da assinatura original, Play Integrity, DRM, login Google ou verificações próprias. Não há garantia de compatibilidade universal.
 
-Use o chat privado do administrador autorizado. Não publique o `.env`, a pasta `auth/whatsapp` nem os arquivos de sessão.
+## Base técnica e licença
 
-## Sessão e operação
-A autenticação é persistida em `auth/whatsapp`. **Nunca apague essa pasta para “corrigir” uma falha** sem entender o estado da sessão. Se o WhatsApp encerrar a sessão, será necessário novo pareamento official. Rode sob PM2 em produção e configure reinício automático.
+O mecanismo de clonagem integrado nesta versão é baseado no projeto **CloniX / CloneForge**, de txorav, licenciado sob GNU GPL v3.0. O código-fonte correspondente está no submódulo `engine/CloniX`; as alterações de marca CLONE X são aplicadas pelo script `ci/brand.sh`.
 
-## Testes
-`npm test` testa regras determinísticas do analisador. `npm run check` verifica sintaxe. Esses testes não substituem um teste real de pareamento, recebimento de mensagens e entrega de alertas, que exige credenciais e uma conta WhatsApp/Telegram controladas pelo operador.
+- Projeto original: https://github.com/txorav/CloniX
+- Licença: https://github.com/txorav/CloniX/blob/main/LICENSE
 
-## kayzen é o melhor
+CLONE X não distribui APKs de terceiros; ele trabalha com aplicativos instalados no próprio dispositivo.

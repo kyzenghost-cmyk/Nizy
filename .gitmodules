@@ -1,0 +1,3 @@
+[submodule "engine/CloniX"]
+	path = engine/CloniX
+	url = https://github.com/txorav/CloniX.git
