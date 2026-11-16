@@ -29,6 +29,8 @@ replacements = {
     "Settings": "Ajustes",
     "Cloning in progress": "Criando cópia",
     "Clone installed: %1$s": "Cópia instalada: %1$s",
+    "About CloniX": "Sobre o CLONE X",
+    "CloniX v1.0.0 Pro": "CLONE X · Edição inicial",
 }
 for a,b in replacements.items():
     s=s.replace(a,b)
@@ -41,7 +43,20 @@ p.write_text(s)
 p = Path("app/src/main/java/dev/cloneforge/app/CloneForgeApp.kt")
 s = p.read_text().replace("com.google.android.material.color.DynamicColors.applyToActivitiesIfAvailable(this)", "androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)")
 p.write_text(s)
-p = Path("app/src/main/res/values/strings.xml")
-s = p.read_text().replace("About CloniX", "Sobre o CLONE X").replace("CloniX v1.0.0 Pro", "CLONE X · Edição inicial")
-p.write_text(s)
+Path("app/src/main/res/values/themes.xml").write_text("""<resources>
+    <style name="Theme.CloneForge" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/cf_primary</item>
+        <item name="colorOnPrimary">@color/cf_on_primary</item>
+        <item name="colorSecondary">@color/cf_primary</item>
+        <item name="colorOnSecondary">@color/cf_on_primary</item>
+        <item name="colorSurface">#080808</item>
+        <item name="colorOnSurface">#FFFFFF</item>
+        <item name="colorBackground">#000000</item>
+        <item name="colorOnBackground">#FFFFFF</item>
+        <item name="android:statusBarColor">#000000</item>
+        <item name="android:navigationBarColor">#000000</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
+""")
 PY
