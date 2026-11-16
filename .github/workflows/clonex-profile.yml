@@ -1,0 +1,32 @@
+name: CLONE X - Managed Profile
+on:
+  push:
+    branches: [clone-x-work-profile]
+    paths:
+      - 'clone-x-dpc/**'
+      - '.github/workflows/clonex-profile.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build CLONE X profile APK
+        working-directory: clone-x-dpc
+        run: gradle --no-daemon assembleDebug
+      - name: Publish APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: CLONE-X-PROFILE-APK
+          path: clone-x-dpc/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
