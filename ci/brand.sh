@@ -51,7 +51,7 @@ Path("app/src/main/res/values/themes.xml").write_text("""<resources>
         <item name="colorOnSecondary">@color/cf_on_primary</item>
         <item name="colorSurface">#080808</item>
         <item name="colorOnSurface">#FFFFFF</item>
-        <item name="colorBackground">#000000</item>
+        <item name="android:colorBackground">#000000</item>
         <item name="colorOnBackground">#FFFFFF</item>
         <item name="android:statusBarColor">#000000</item>
         <item name="android:navigationBarColor">#000000</item>
