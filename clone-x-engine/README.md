@@ -1,39 +1,33 @@
 # CLONE X — engine de clonagem
 
-O protótipo anterior baseado em Managed Profile foi arquivado como experimento e não é o motor principal do CLONE X.
+## Engine atual: virtualização BlackBox
 
-## Engine integrada
+A engine CloniX/CloneForge foi descartada como base principal depois do teste no aparelho: os aplicativos clonados não iniciavam. O CLONE X passa a usar uma arquitetura diferente, baseada no motor de virtualização BlackBox/NewBlackbox, em vez de reescrever e reassinar cada APK.
 
-O workflow compila o **CloniX / CloneForge** como motor de clonagem, fixado no commit:
+- Base: https://github.com/ashiquesheriefofficial-max/MaxCloner
+- Commit fixado: `fd3f410962f24a3ebbb4c26d2ed38f95c58de75e`
+- Licença da base: Apache-2.0.
+- Requisitos declarados pela base: Android 5.0+; ARM32 e ARM64.
+- O Galaxy A7 com Android 10 está dentro da faixa de versão declarada, mas ainda exige teste físico.
 
-- Repositório original: https://github.com/txorav/CloniX
-- Commit fixado: `da50e8a9f7d141460a9fa0957b3378b65dbca606`
-- Licença: GPL-3.0 (o código derivado e as modificações distribuídas devem respeitar a GPL-3.0).
-- Compatibilidade declarada pelo upstream: Android 9+ (API 28–36), ARM64 e ARM32.
+## Como funciona
 
-O código-fonte upstream é obtido pelo workflow em `clone-x-engine/upstream`, e o workflow aplica a marca CLONE X e o applicationId `app.clonex` antes de compilar. O código upstream não é copiado para este diretório; a referência acima identifica exatamente a versão utilizada.
+Os aplicativos são instalados e executados dentro de espaços virtuais isolados do motor BlackBox. Cada espaço mantém seus próprios dados e sessão. A mesma aplicação pode ser adicionada em mais de um espaço, sem criar APKs independentes com package names diferentes.
 
-## O que a engine faz
+A base MaxCloner inclui suporte a split APKs (base + configurações de ABI/densidade), importante para apps modernos distribuídos pela Play Store.
 
-- Lê APK base e splits instalados.
-- Reescreve identificador do pacote, authorities e referências do manifesto.
-- Injeta runtime de compatibilidade Java e hooks nativos.
-- Assina as cópias com identidade persistente no dispositivo.
-- Instala cada clone como pacote Android separado, com UID e sandbox de dados próprios.
-- Permite criar múltiplas instâncias numeradas.
+## Limitações e validação
 
-## Limitações que precisam ser testadas
+Virtualização não equivale a instalação Android nativa. Aplicativos que dependem de Play Integrity, assinatura original, Google Sign-In ou verificações anti-virtualização podem recusar execução. O próprio projeto-base alerta que alguns mensageiros podem detectar ambientes virtualizados; não há garantia de que o WhatsApp funcione ou permita múltiplas sessões.
 
-A alteração de package name e assinatura não é uma cópia criptograficamente idêntica. O runtime tenta compatibilizar verificações e referências internas, mas não pode garantir que todo aplicativo aceite a cópia. Serviços vinculados à identidade original, Play Integrity, autenticação, notificações push, chamadas e verificações nativas podem falhar.
-
-A engine upstream declara suporte a Android 9+ e arquiteturas ARM32/ARM64. Isso não equivale a compatibilidade comprovada com todos os aparelhos ou aplicativos. O WhatsApp ainda precisa ser testado fisicamente em pelo menos cinco instâncias: instalação, abertura, login independente, notificações, mídia, câmera, chamadas e reinicialização.
+Antes de anunciar o CLONE X como funcional, testar no Samsung Android 10: abrir o host, importar um app simples, iniciar e fechar o clone, criar dois espaços do WhatsApp, login independente, notificações, mídia, câmera, chamadas e reinicialização. Não tratar compilação bem-sucedida como prova de funcionamento.
 
 ## Build
 
-O workflow `.github/workflows/clonex-profile.yml` compila o runtime, a ponte nativa e o APK CLONE X. O artefato se chama `CLONE-X-APK`.
+O workflow `.github/workflows/clonex-profile.yml` baixa o commit fixado, aplica a marca CLONE X e compila as variantes de APK. O artefato será `CLONE-X-VIRTUAL-APK`.
 
-A compilação do APK não comprova funcionamento do WhatsApp. Não anunciar como produto funcional antes dos testes em aparelho físico.
+O applicationId do host é `app.clonex`. O namespace interno `top.niunaijun.blackbox` deve permanecer inalterado porque é referenciado por código Java e JNI.
 
-## Aviso de distribuição
+## Distribuição
 
-CloniX é GPL-3.0. Antes de distribuir versões modificadas, publicar ou disponibilizar aos destinatários o código-fonte correspondente completo, scripts de build e modificações, manter avisos de copyright/licença e cumprir os demais termos da GPL-3.0. Não remover os créditos do projeto original.
+Manter os avisos de licença Apache-2.0 e os créditos exigidos pela base. O CLONE X é uma adaptação e não deve ser apresentado como o projeto original MaxCloner.
