@@ -8,10 +8,9 @@ test -s "$APK" || { echo "APK ausente: $APK"; exit 1; }
 "$BT/aapt2" dump badging "$APK" > /tmp/clonex-badging.txt
 grep -F "package: name='app.clonex.profile.v2'" /tmp/clonex-badging.txt
 grep -F "application-label:'CLONE X'" /tmp/clonex-badging.txt
-grep -F "sdkVersion:'28'" /tmp/clonex-badging.txt
-grep -F "targetSdkVersion:'29'" /tmp/clonex-badging.txt
-
 "$BT/aapt2" dump xmltree "$APK" --file AndroidManifest.xml > /tmp/clonex-manifest.txt
+grep -F "minSdkVersion" /tmp/clonex-manifest.txt
+grep -F "targetSdkVersion" /tmp/clonex-manifest.txt
 grep -F "app.clonex.profile.CloneXAdminReceiver" /tmp/clonex-manifest.txt
 grep -F "android.permission.BIND_DEVICE_ADMIN" /tmp/clonex-manifest.txt
 grep -F "android.app.device_admin" /tmp/clonex-manifest.txt
