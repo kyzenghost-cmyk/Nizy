@@ -4,9 +4,11 @@ import android.app.Activity
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.PersistableBundle
+import android.os.UserHandle
+import android.os.UserManager
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.Button
@@ -18,8 +20,10 @@ import android.widget.Toast
 class MainActivity : Activity() {
     private lateinit var dpm: DevicePolicyManager
     private lateinit var admin: ComponentName
+    private lateinit var root: LinearLayout
     private lateinit var status: TextView
     private lateinit var packageInput: EditText
+    private val prefs by lazy { getSharedPreferences("clone_x_users", Context.MODE_PRIVATE) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -30,96 +34,176 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        if (::status.isInitialized) updateStatus()
+        if (::root.isInitialized) render()
     }
 
     private fun render() {
-        val root = LinearLayout(this).apply {
+        root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER_HORIZONTAL
-            setPadding(28, 36, 28, 28)
+            setPadding(28, 32, 28, 28)
         }
         root.addView(TextView(this).apply { text = "CLONE X"; textSize = 30f })
-        status = TextView(this).apply { textSize = 15f; setPadding(0, 20, 0, 20) }
+        status = TextView(this).apply { textSize = 14f; setPadding(0, 16, 0, 18) }
         root.addView(status)
+
+        when {
+            dpm.isDeviceOwnerApp(packageName) -> renderDeviceOwner()
+            dpm.isProfileOwnerApp(packageName) -> renderCloneSpace()
+            else -> renderNotProvisioned()
+        }
+        setContentView(root)
+    }
+
+    private fun renderNotProvisioned() {
+        status.text = "Configuração inicial necessária"
+        root.addView(TextView(this).apply {
+            text = "Para criar vários usuários Android independentes, o CLONE X precisa ser Administrador do dispositivo (Device Owner). O Android só permite ativar isso durante a configuração inicial do aparelho ou em um aparelho de teste preparado para provisionamento."
+            textSize = 15f
+        })
+        root.addView(TextView(this).apply {
+            text = "ATENÇÃO: o procedimento de produção exige redefinição de fábrica. Faça backup antes. Não execute se não quiser apagar os dados do telefone."
+            textSize = 14f
+            setPadding(0, 18, 0, 18)
+        })
+        root.addView(TextView(this).apply {
+            text = "Com ADB em um aparelho de teste recém-redefinido, depois de instalar o APK, o comando de desenvolvimento é:\n\nadb shell dpm set-device-owner app.clonex.profile/.CloneXAdminReceiver"
+            textSize = 13f
+        })
         root.addView(Button(this).apply {
-            text = "CRIAR ESPAÇO SEPARADO"
-            setOnClickListener { startProfileProvisioning() }
+            text = "VERIFICAR SUPORTE A MÚLTIPLOS USUÁRIOS"
+            setOnClickListener {
+                val um = getSystemService(Context.USER_SERVICE) as UserManager
+                val feature = packageManager.hasSystemFeature(PackageManager.FEATURE_MANAGED_USERS)
+                toast("Managed users: $feature | limite informado: ${um.userProfiles.size} perfil(is) visível(is).")
+            }
         }, match())
+    }
+
+    private fun renderDeviceOwner() {
+        status.text = "Administrador principal ativo — este aparelho está gerenciado pelo CLONE X."
+        root.addView(Button(this).apply {
+            text = "CRIAR NOVO ESPAÇO / CÓPIA"
+            setOnClickListener { createCloneUser() }
+        }, match())
+        root.addView(TextView(this).apply {
+            text = "Cada espaço é um usuário Android real, com dados e sessão separados. O limite depende do firmware Samsung e da memória disponível."
+            textSize = 13f
+            setPadding(0, 16, 0, 12)
+        })
+        val serials = prefs.getStringSet("serials", emptySet())!!.toList().sorted()
+        if (serials.isEmpty()) {
+            root.addView(TextView(this).apply { text = "Nenhum espaço criado ainda."; textSize = 14f })
+        }
+        serials.forEachIndexed { index, serial ->
+            val handle = (getSystemService(Context.USER_SERVICE) as UserManager)
+                .getUserForSerialNumber(serial.toLongOrNull() ?: -1L)
+            if (handle != null) {
+                root.addView(Button(this).apply {
+                    text = "ABRIR ESPAÇO ${index + 1}"
+                    setOnClickListener { switchTo(handle) }
+                }, match())
+            }
+        }
+    }
+
+    private fun renderCloneSpace() {
+        status.text = "Espaço independente ativo. Instale o app original neste usuário."
         packageInput = EditText(this).apply {
             hint = "Pacote do app (ex.: com.whatsapp)"
             setSingleLine(true)
         }
         root.addView(packageInput, match())
         root.addView(Button(this).apply {
-            text = "ADICIONAR APP AO ESPAÇO"
-            setOnClickListener { addExistingApp(packageInput.text.toString().trim()) }
+            text = "INSTALAR APP ORIGINAL NESTE ESPAÇO"
+            setOnClickListener { installIntoThisUser(packageInput.text.toString().trim()) }
         }, match())
         root.addView(TextView(this).apply {
-            text = "O Android cria um perfil isolado. O app original é instalado nesse perfil sem reempacotar nem alterar seu APK."
+            text = "Depois da instalação, o app abre com armazenamento, login e dados separados dos outros usuários. Para trocar de espaço, use o seletor de usuários do próprio Android/Samsung."
             textSize = 13f
-            setPadding(0, 24, 0, 0)
+            setPadding(0, 18, 0, 0)
         })
-        setContentView(root)
-        updateStatus()
     }
 
-    private fun match() = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = 12 }
-
-    private fun updateStatus() {
-        val owner = dpm.isProfileOwnerApp(packageName)
-        status.text = if (owner) "Espaço separado ativo neste perfil." else "Espaço ainda não criado neste aparelho."
-    }
-
-    private fun startProfileProvisioning() {
-        if (!packageManager.hasSystemFeature(PackageManager.FEATURE_MANAGED_USERS)) {
-            toast("Este aparelho não oferece suporte a perfis gerenciados.")
+    private fun createCloneUser() {
+        if (!dpm.isDeviceOwnerApp(packageName)) {
+            toast("O CLONE X não é Device Owner.")
             return
         }
-        if (dpm.isProfileOwnerApp(packageName)) {
-            toast("O espaço CLONE X já está ativo.")
-            return
-        }
-        val intent = Intent(DevicePolicyManager.ACTION_PROVISION_MANAGED_PROFILE).apply {
-            putExtra(DevicePolicyManager.EXTRA_PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME, admin)
-        }
-        try {
-            startActivityForResult(intent, REQUEST_PROVISION)
-        } catch (_: Exception) {
-            toast("O Android não aceitou iniciar a criação do perfil neste aparelho.")
-        }
-    }
-
-    private fun addExistingApp(packageNameToAdd: String) {
-        if (!dpm.isProfileOwnerApp(packageName)) {
-            toast("Crie o espaço separado primeiro.")
-            return
-        }
-        if (packageNameToAdd.isBlank() || packageNameToAdd == packageName) {
-            toast("Informe o pacote do aplicativo.")
+        val serials = prefs.getStringSet("serials", emptySet())!!.toMutableSet()
+        if (serials.size >= MAX_SPACES) {
+            toast("Limite do CLONE X atingido: $MAX_SPACES espaços. O Android/Samsung ainda pode impor um limite menor.")
             return
         }
         try {
-            val installed = dpm.installExistingPackage(admin, packageNameToAdd)
-            if (!installed) {
-                toast("O Android não conseguiu instalar esse app no perfil. Confirme que ele está instalado no perfil principal.")
+            val index = serials.size + 1
+            val user = dpm.createAndManageUser(
+                admin,
+                "CLONE X $index",
+                admin,
+                PersistableBundle(),
+                DevicePolicyManager.SKIP_SETUP_WIZARD
+            )
+            if (user == null) {
+                toast("O Android recusou a criação. O firmware pode ter atingido o limite de usuários.")
                 return
             }
-            val launch = packageManager.getLaunchIntentForPackage(packageNameToAdd)
-            if (launch != null) {
-                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                startActivity(launch)
-            } else {
-                toast("App adicionado ao perfil, mas não foi encontrado um atalho de abertura.")
-            }
+            val serial = (getSystemService(Context.USER_SERVICE) as UserManager).getSerialNumberForUser(user)
+            serials.add(serial.toString())
+            prefs.edit().putStringSet("serials", serials).apply()
+            if (!switchTo(user)) toast("Espaço criado, mas o Android não permitiu alternar automaticamente. Use o seletor de usuários.")
         } catch (e: SecurityException) {
-            toast("Permissão de administrador do perfil não concedida pelo Android.")
+            toast("Permissão negada. O CLONE X precisa ser Device Owner.")
         } catch (e: Exception) {
-            toast("Falha ao adicionar app: ${e.javaClass.simpleName}")
+            toast("Falha ao criar espaço: ${e.message ?: e.javaClass.simpleName}")
         }
     }
 
-    private fun toast(message: String) = Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+    private fun switchTo(user: UserHandle): Boolean {
+        return try {
+            val ok = dpm.switchUser(admin, user)
+            if (!ok) toast("O Android recusou a troca de usuário.")
+            ok
+        } catch (e: Exception) {
+            toast("Não foi possível trocar de usuário: ${e.javaClass.simpleName}")
+            false
+        }
+    }
 
-    companion object { private const val REQUEST_PROVISION = 4102 }
+    private fun installIntoThisUser(targetPackage: String) {
+        if (!dpm.isProfileOwnerApp(packageName)) {
+            toast("Este espaço não está administrado pelo CLONE X.")
+            return
+        }
+        if (targetPackage.isBlank() || targetPackage == packageName) {
+            toast("Informe o pacote do aplicativo que já está instalado no usuário principal.")
+            return
+        }
+        try {
+            if (!dpm.installExistingPackage(admin, targetPackage)) {
+                toast("O Android não encontrou esse app instalado em outro usuário.")
+                return
+            }
+            val launch = packageManager.getLaunchIntentForPackage(targetPackage)
+            if (launch == null) {
+                toast("Instalado, mas sem atividade de inicialização.")
+                return
+            }
+            startActivity(launch)
+        } catch (e: Exception) {
+            toast("Falha ao instalar neste espaço: ${e.message ?: e.javaClass.simpleName}")
+        }
+    }
+
+    private fun match() = LinearLayout.LayoutParams(
+        ViewGroup.LayoutParams.MATCH_PARENT,
+        ViewGroup.LayoutParams.WRAP_CONTENT
+    ).apply { topMargin = 12 }
+
+    private fun toast(message: String) =
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+
+    companion object {
+        private const val MAX_SPACES = 10
+    }
 }
