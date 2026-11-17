@@ -1,15 +1,37 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-feature android:name="android.software.managed_users" android:required="false" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
-    <queries><package android:name="com.whatsapp" /></queries>
-    <application android:allowBackup="false" android:label="CLONE X" android:theme="@android:style/Theme.Material.Light.NoActionBar">
-        <activity android:name=".MainActivity" android:exported="true">
-            <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
-            <intent-filter><action android:name="android.app.action.PROVISION_MANAGED_PROFILE" /><category android:name="android.intent.category.DEFAULT" /></intent-filter>
+    <queries>
+        <package android:name="com.whatsapp" />
+    </queries>
+    <application
+        android:allowBackup="false"
+        android:label="CLONE X"
+        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <activity
+            android:name="app.clonex.profile.MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.app.action.PROVISION_MANAGED_PROFILE" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
         </activity>
-        <receiver android:name=".CloneXAdminReceiver" android:description="@string/admin_description" android:label="CLONE X" android:permission="android.permission.BIND_DEVICE_ADMIN" android:exported="true">
-            <meta-data android:name="android.app.device_admin" android:resource="@xml/device_admin" />
-            <intent-filter><action android:name="android.app.action.DEVICE_ADMIN_ENABLED" /></intent-filter>
+        <receiver
+            android:name="app.clonex.profile.CloneXAdminReceiver"
+            android:description="@string/admin_description"
+            android:label="CLONE X"
+            android:permission="android.permission.BIND_DEVICE_ADMIN"
+            android:exported="true">
+            <meta-data
+                android:name="android.app.device_admin"
+                android:resource="@xml/device_admin" />
+            <intent-filter>
+                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+            </intent-filter>
         </receiver>
     </application>
 </manifest>
