@@ -1,29 +1,44 @@
-# CLONE X — perfil Android isolado
+# CLONE X — espaços isolados por usuários Android
 
-Este diretório contém a implementação inicial do CLONE X baseada em **Android Managed Profiles** (perfil gerenciado), em vez de reempacotar o APK do aplicativo-alvo.
+O CLONE X agora usa o mecanismo multiusuário nativo do Android, não reempacota APKs e não injeta hooks no processo do WhatsApp.
 
-## Fluxo implementado
+## Como funciona
 
-1. O usuário instala e abre CLONE X.
-2. CLONE X verifica se o aparelho oferece suporte a perfis gerenciados.
-3. O botão **CRIAR ESPAÇO SEPARADO** inicia o fluxo oficial de provisionamento do Android.
-4. Depois que o Android concede a função de Profile Owner ao CLONE X, o usuário informa o application ID do app já instalado no perfil principal (por exemplo, `com.whatsapp`).
-5. CLONE X chama `DevicePolicyManager.installExistingPackage()` para instalar a aplicação original no perfil gerenciado, preservando o APK e a assinatura do fornecedor. O Android mantém os dados do perfil separados.
+- O CLONE X é provisionado como **Device Owner** do aparelho.
+- O Device Owner cria usuários Android secundários com `DevicePolicyManager.createAndManageUser()`.
+- Cada usuário possui armazenamento privado, contas, configurações e sessões independentes.
+- O CLONE X é instalado como Profile Owner em cada usuário criado.
+- Dentro de cada espaço, `DevicePolicyManager.installExistingPackage()` instala a cópia existente do aplicativo original, preservando pacote, assinatura e código.
+- O usuário alterna entre espaços pelo seletor de usuários do Android/Samsung.
 
-## Compilação
+## Requisito crítico de provisionamento
 
-O workflow `.github/workflows/clonex-profile.yml` compila este projeto e publica o artefato `CLONE-X-PROFILE-APK`.
+Um aplicativo comum não pode se promover a Device Owner em um telefone já configurado. O provisionamento de Device Owner é feito durante o assistente inicial, em aparelho novo ou após redefinição de fábrica. Para desenvolvimento, o Android também oferece o comando ADB:
 
-## Estado honesto
+```bash
+adb shell dpm set-device-owner app.clonex.profile/.CloneXAdminReceiver
+```
 
-Este é um protótipo de integração DPC/Managed Profile, não uma versão comercial validada. O build verifica compilação, não a criação real do perfil nem o funcionamento do WhatsApp. O teste funcional precisa ser feito em aparelhos Android físicos de fabricantes diferentes, incluindo provisionamento, instalação do pacote no perfil, inicialização, notificações, mídia, backup e remoção do perfil.
+**Atenção: esse procedimento pode exigir redefinição de fábrica e apaga os dados do aparelho. Faça backup antes. Não execute o comando em seu telefone principal sem compreender o impacto.**
 
-O Android/fabricante pode bloquear o provisionamento ou não oferecer `FEATURE_MANAGED_USERS`. O usuário precisa aceitar o fluxo do sistema. O ícone do app no launcher pode receber o indicador visual de perfil de trabalho do próprio Android.
+O APK atual não executa redefinição, não ativa Device Owner sozinho e não contorna as proteções do Android.
 
-## Próximas tarefas técnicas
+## Limites reais
 
-- Validar provisionamento em Android 9–16 e em interfaces Samsung, Motorola e Xiaomi.
-- Implementar descoberta de apps instalados sem depender de digitação manual do package ID.
-- Implementar listagem e gerenciamento do perfil, remoção segura e tratamento de erros específicos do fabricante.
-- Criar fluxo de onboarding, política de privacidade e suporte comercial.
-- Testar WhatsApp oficial em um dispositivo físico antes de anunciar compatibilidade.
+- O Android/fabricante decide se múltiplos usuários estão habilitados e quantos podem existir.
+- O CLONE X limita a interface a 10 espaços, mas Samsung/Android pode impor limite inferior.
+- O método depende de o firmware permitir multiusuário e de o app original continuar disponível para instalação nos outros usuários.
+- Notificações, Play Services, backup, mídia e comportamento do WhatsApp precisam ser testados em aparelho físico.
+- Não há confirmação de compatibilidade funcional com o Samsung SM-A750G/Android 10 até executar o provisionamento e testar nesse modelo.
+
+## Build
+
+GitHub Actions compila `clone-x-dpc` e publica o artefato `CLONE-X-APK`. Build bem-sucedido significa apenas que o APK foi compilado e verificado; não significa que o firmware do aparelho aceita Device Owner ou 10 usuários.
+
+## API Android usada
+
+- `DevicePolicyManager.createAndManageUser` (API 24+)
+- `DevicePolicyManager.installExistingPackage` (API 28+)
+- `DevicePolicyManager.switchUser` (API 28+)
+
+Documentação oficial: https://developer.android.com/reference/android/app/admin/DevicePolicyManager
