@@ -1,9 +1,9 @@
-name: CLONE X - Managed Profile
+name: CLONE X - CloniX Engine
 on:
   push:
     branches: [clone-x-work-profile]
     paths:
-      - 'clone-x-dpc/**'
+      - 'clone-x-engine/**'
       - '.github/workflows/clonex-profile.yml'
   workflow_dispatch:
 permissions:
@@ -12,28 +12,46 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout CLONE X integration
+        uses: actions/checkout@v4
+      - name: Checkout pinned CloniX engine source
+        uses: actions/checkout@v4
+        with:
+          repository: txorav/CloniX
+          ref: da50e8a9f7d141460a9fa0957b3378b65dbca606
+          path: clone-x-engine/upstream
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-      - name: Set up Android SDK
+      - name: Set up Android SDK, NDK and CMake
         uses: android-actions/setup-android@v3
         with:
           packages: platform-tools
-      - name: Install Android SDK packages
+      - name: Install Android build packages
         run: |
           yes | sdkmanager --licenses
-          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.2.12479018" "cmake;3.22.1"
       - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
-      - name: Build CLONE X profile APK
-        working-directory: clone-x-dpc
-        run: gradle --no-daemon assembleDebug
+      - name: Apply CLONE X branding
+        working-directory: clone-x-engine/upstream
+        run: |
+          sed -i 's/<string name="app_name">CloniX<\//<string name="app_name">CLONE X<\//; s/<string name="app_title">CloniX<\//<string name="app_title">CLONE X<\//; s/CloniX/CLONE X/g; s/CloneForge/CLONE X/g' app/src/main/res/values/strings.xml
+          sed -i 's/applicationId = "dev.cloneforge"/applicationId = "app.clonex"/' app/build.gradle.kts
+      - name: Build runtime payload and native bridge
+        working-directory: clone-x-engine/upstream
+        run: gradle :runtime-payload:assembleRelease :native-bridge:assembleRelease --stacktrace
+      - name: Package runtime payload
+        working-directory: clone-x-engine/upstream
+        run: |
+          chmod +x ci/prepare_payload.sh
+          ci/prepare_payload.sh
+      - name: Build CLONE X APK
+        working-directory: clone-x-engine/upstream
+        run: gradle :app:assembleDebug -x lint --stacktrace
       - name: Publish APK
         uses: actions/upload-artifact@v4
         with:
-          name: CLONE-X-PROFILE-APK
-          path: clone-x-dpc/app/build/outputs/apk/debug/app-debug.apk
+          name: CLONE-X-APK
+          path: clone-x-engine/upstream/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
