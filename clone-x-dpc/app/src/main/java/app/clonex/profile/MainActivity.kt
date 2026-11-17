@@ -21,9 +21,9 @@ class MainActivity : Activity() {
     private lateinit var dpm: DevicePolicyManager
     private lateinit var admin: ComponentName
     private lateinit var root: LinearLayout
-    private lateinit var status: TextView
     private lateinit var packageInput: EditText
     private val prefs by lazy { getSharedPreferences("clone_x_users", Context.MODE_PRIVATE) }
+    private val userManager by lazy { getSystemService(Context.USER_SERVICE) as UserManager }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -44,60 +44,64 @@ class MainActivity : Activity() {
             setPadding(28, 32, 28, 28)
         }
         root.addView(TextView(this).apply { text = "CLONE X"; textSize = 30f })
-        status = TextView(this).apply { textSize = 14f; setPadding(0, 16, 0, 18) }
+        val status = TextView(this).apply { textSize = 14f; setPadding(0, 16, 0, 18) }
         root.addView(status)
 
         when {
-            dpm.isDeviceOwnerApp(packageName) -> renderDeviceOwner()
-            dpm.isProfileOwnerApp(packageName) -> renderCloneSpace()
-            else -> renderNotProvisioned()
+            dpm.isDeviceOwnerApp(packageName) -> renderDeviceOwner(status)
+            dpm.isProfileOwnerApp(packageName) -> renderCloneSpace(status)
+            else -> renderNotProvisioned(status)
         }
         setContentView(root)
     }
 
-    private fun renderNotProvisioned() {
-        status.text = "Configuração inicial necessária"
+    private fun renderNotProvisioned(status: TextView) {
+        status.text = "Ativação necessária"
         root.addView(TextView(this).apply {
-            text = "Para criar vários usuários Android independentes, o CLONE X precisa ser Administrador do dispositivo (Device Owner). O Android só permite ativar isso durante a configuração inicial do aparelho ou em um aparelho de teste preparado para provisionamento."
+            text = "Para criar usuários Android independentes, o CLONE X precisa ser Device Owner. A ativação é feita por ADB; não existe botão capaz de conceder esse privilégio."
             textSize = 15f
         })
         root.addView(TextView(this).apply {
-            text = "ATENÇÃO: o procedimento de produção exige redefinição de fábrica. Faça backup antes. Não execute se não quiser apagar os dados do telefone."
+            text = "Não faça redefinição de fábrica por causa deste app. Primeiro tente o comando abaixo com depuração USB. Se o Android recusar por causa da configuração/contas existentes, pare e envie a mensagem exata; não apague os dados do telefone."
             textSize = 14f
             setPadding(0, 18, 0, 18)
         })
         root.addView(TextView(this).apply {
-            text = "Com ADB em um aparelho de teste recém-redefinido, depois de instalar o APK, o comando de desenvolvimento é:\n\nadb shell dpm set-device-owner app.clonex.profile/.CloneXAdminReceiver"
+            text = "adb shell dpm set-device-owner $packageName/app.clonex.profile.CloneXAdminReceiver"
             textSize = 13f
         })
         root.addView(Button(this).apply {
-            text = "VERIFICAR SUPORTE A MÚLTIPLOS USUÁRIOS"
+            text = "VERIFICAR SUPORTE"
             setOnClickListener {
-                val um = getSystemService(Context.USER_SERVICE) as UserManager
                 val feature = packageManager.hasSystemFeature(PackageManager.FEATURE_MANAGED_USERS)
-                toast("Managed users: $feature | limite informado: ${um.userProfiles.size} perfil(is) visível(is).")
+                val max = userManager.userProfiles.size
+                toast("Managed users: $feature | perfis visíveis: $max")
             }
         }, match())
     }
 
-    private fun renderDeviceOwner() {
-        status.text = "Administrador principal ativo — este aparelho está gerenciado pelo CLONE X."
+    private fun renderDeviceOwner(status: TextView) {
+        status.text = "Device Owner ativo. Gerenciamento do aparelho habilitado."
+        // O Device Owner e cada Profile Owner precisam compartilhar ao menos
+        // um affiliation ID para operações permitidas entre usuários.
+        runCatching { dpm.setAffiliationIds(admin, setOf(AFFILIATION_ID)) }
+            .onFailure { toast("Não foi possível configurar afiliação: ${it.message}") }
+
         root.addView(Button(this).apply {
-            text = "CRIAR NOVO ESPAÇO / CÓPIA"
+            text = "CRIAR NOVO ESPAÇO"
             setOnClickListener { createCloneUser() }
         }, match())
         root.addView(TextView(this).apply {
-            text = "Cada espaço é um usuário Android real, com dados e sessão separados. O limite depende do firmware Samsung e da memória disponível."
+            text = "Cada espaço é um usuário Android separado. O firmware Samsung pode limitar ou bloquear a criação."
             textSize = 13f
             setPadding(0, 16, 0, 12)
         })
         val serials = prefs.getStringSet("serials", emptySet())!!.toList().sorted()
         if (serials.isEmpty()) {
-            root.addView(TextView(this).apply { text = "Nenhum espaço criado ainda."; textSize = 14f })
+            root.addView(TextView(this).apply { text = "Nenhum espaço criado."; textSize = 14f })
         }
         serials.forEachIndexed { index, serial ->
-            val handle = (getSystemService(Context.USER_SERVICE) as UserManager)
-                .getUserForSerialNumber(serial.toLongOrNull() ?: -1L)
+            val handle = userManager.getUserForSerialNumber(serial.toLongOrNull() ?: -1L)
             if (handle != null) {
                 root.addView(Button(this).apply {
                     text = "ABRIR ESPAÇO ${index + 1}"
@@ -107,19 +111,28 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun renderCloneSpace() {
-        status.text = "Espaço independente ativo. Instale o app original neste usuário."
+    private fun renderCloneSpace(status: TextView) {
+        status.text = "Espaço independente ativo."
+        val affiliation = runCatching {
+            dpm.setAffiliationIds(admin, setOf(AFFILIATION_ID))
+            dpm.isAffiliatedUser
+        }.getOrDefault(false)
+        root.addView(TextView(this).apply {
+            text = if (affiliation) "Afiliação com o dispositivo confirmada." else
+                "Afiliação ainda não confirmada. A instalação pode ser recusada pelo Android."
+            textSize = 13f
+        })
         packageInput = EditText(this).apply {
             hint = "Pacote do app (ex.: com.whatsapp)"
             setSingleLine(true)
         }
         root.addView(packageInput, match())
         root.addView(Button(this).apply {
-            text = "INSTALAR APP ORIGINAL NESTE ESPAÇO"
+            text = "INSTALAR APP NESTE ESPAÇO"
             setOnClickListener { installIntoThisUser(packageInput.text.toString().trim()) }
         }, match())
         root.addView(TextView(this).apply {
-            text = "Depois da instalação, o app abre com armazenamento, login e dados separados dos outros usuários. Para trocar de espaço, use o seletor de usuários do próprio Android/Samsung."
+            text = "O app precisa já estar instalado no aparelho. A instalação ocorre no usuário atual e mantém os dados/login separados."
             textSize = 13f
             setPadding(0, 18, 0, 0)
         })
@@ -127,71 +140,74 @@ class MainActivity : Activity() {
 
     private fun createCloneUser() {
         if (!dpm.isDeviceOwnerApp(packageName)) {
-            toast("O CLONE X não é Device Owner.")
+            toast("CLONE X não é Device Owner.")
             return
         }
         val serials = prefs.getStringSet("serials", emptySet())!!.toMutableSet()
         if (serials.size >= MAX_SPACES) {
-            toast("Limite do CLONE X atingido: $MAX_SPACES espaços. O Android/Samsung ainda pode impor um limite menor.")
+            toast("Limite local de $MAX_SPACES espaços atingido.")
             return
         }
         try {
-            val index = serials.size + 1
+            dpm.setAffiliationIds(admin, setOf(AFFILIATION_ID))
             val user = dpm.createAndManageUser(
                 admin,
-                "CLONE X $index",
+                "CLONE X ${serials.size + 1}",
                 admin,
                 PersistableBundle(),
                 DevicePolicyManager.SKIP_SETUP_WIZARD
-            )
-            if (user == null) {
-                toast("O Android recusou a criação. O firmware pode ter atingido o limite de usuários.")
+            ) ?: run {
+                toast("Android/Samsung recusou a criação do usuário.")
                 return
             }
-            val serial = (getSystemService(Context.USER_SERVICE) as UserManager).getSerialNumberForUser(user)
+            val serial = userManager.getSerialNumberForUser(user)
+            if (serial < 0L) error("Não foi possível obter o serial do usuário criado.")
             serials.add(serial.toString())
             prefs.edit().putStringSet("serials", serials).apply()
-            if (!switchTo(user)) toast("Espaço criado, mas o Android não permitiu alternar automaticamente. Use o seletor de usuários.")
+            if (!switchTo(user)) {
+                toast("Espaço criado. Use o seletor de usuários do Android para entrar.")
+            }
         } catch (e: SecurityException) {
-            toast("Permissão negada. O CLONE X precisa ser Device Owner.")
+            toast("Permissão negada: confirme Device Owner e as regras do firmware.")
         } catch (e: Exception) {
             toast("Falha ao criar espaço: ${e.message ?: e.javaClass.simpleName}")
         }
     }
 
-    private fun switchTo(user: UserHandle): Boolean {
-        return try {
-            val ok = dpm.switchUser(admin, user)
-            if (!ok) toast("O Android recusou a troca de usuário.")
-            ok
-        } catch (e: Exception) {
-            toast("Não foi possível trocar de usuário: ${e.javaClass.simpleName}")
-            false
-        }
+    private fun switchTo(user: UserHandle): Boolean = try {
+        val ok = dpm.switchUser(admin, user)
+        if (!ok) toast("Android recusou a troca de usuário.")
+        ok
+    } catch (e: Exception) {
+        toast("Falha ao trocar de usuário: ${e.message ?: e.javaClass.simpleName}")
+        false
     }
 
     private fun installIntoThisUser(targetPackage: String) {
         if (!dpm.isProfileOwnerApp(packageName)) {
-            toast("Este espaço não está administrado pelo CLONE X.")
+            toast("Este usuário não está administrado como Profile Owner.")
             return
         }
         if (targetPackage.isBlank() || targetPackage == packageName) {
-            toast("Informe o pacote do aplicativo que já está instalado no usuário principal.")
+            toast("Informe o pacote do aplicativo, por exemplo com.whatsapp.")
             return
         }
         try {
-            if (!dpm.installExistingPackage(admin, targetPackage)) {
-                toast("O Android não encontrou esse app instalado em outro usuário.")
-                return
+            // Reaplica a afiliação no próprio Profile Owner; o Device Owner
+            // define o mesmo ID antes de criar o usuário.
+            dpm.setAffiliationIds(admin, setOf(AFFILIATION_ID))
+            if (!dpm.isAffiliatedUser) {
+                error("Usuário não afiliado ao Device Owner; instalação bloqueada pelo Android.")
             }
-            val launch = packageManager.getLaunchIntentForPackage(targetPackage)
-            if (launch == null) {
-                toast("Instalado, mas sem atividade de inicialização.")
-                return
-            }
-            startActivity(launch)
+            val installed = dpm.installExistingPackage(admin, targetPackage)
+            if (!installed) error("Package Manager não disponibilizou $targetPackage neste usuário.")
+            // Não reporta sucesso antes de consultar o PackageManager local.
+            packageManager.getPackageInfo(targetPackage, 0)
+            toast("Instalado e confirmado neste espaço: $targetPackage")
+            packageManager.getLaunchIntentForPackage(targetPackage)?.let { startActivity(it) }
+                ?: toast("Instalado, mas sem atividade de inicialização.")
         } catch (e: Exception) {
-            toast("Falha ao instalar neste espaço: ${e.message ?: e.javaClass.simpleName}")
+            toast("Falha ao instalar: ${e.message ?: e.javaClass.simpleName}")
         }
     }
 
@@ -205,5 +221,6 @@ class MainActivity : Activity() {
 
     companion object {
         private const val MAX_SPACES = 10
+        private const val AFFILIATION_ID = "clonex-device-affiliation-v1"
     }
 }
