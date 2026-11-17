@@ -1,53 +1,54 @@
-name: CLONE X - Virtualization Engine
+name: CLONE X - Android Multi-User Engine
+
 on:
   push:
     branches: [clone-x-work-profile]
     paths:
-      - 'clone-x-engine/**'
+      - 'clone-x-dpc/**'
       - '.github/workflows/clonex-profile.yml'
   workflow_dispatch:
+
 permissions:
   contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout CLONE X integration
+      - name: Checkout CLONE X
         uses: actions/checkout@v4
-      - name: Checkout pinned MaxCloner virtualization engine
-        uses: actions/checkout@v4
-        with:
-          repository: ashiquesheriefofficial-max/MaxCloner
-          ref: fd3f410962f24a3ebbb4c26d2ed38f95c58de75e
-          path: clone-x-engine/upstream
-      - name: Set up JDK 21
+
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '21'
+          java-version: '17'
+
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-      - name: Install Android build packages
+
+      - name: Install Android SDK packages
         run: |
           yes | sdkmanager --licenses
-          sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;29.0.13846066"
-      - uses: gradle/actions/setup-gradle@v4
-      - name: Apply CLONE X branding and package identity
-        working-directory: clone-x-engine/upstream
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build CLONE X
+        working-directory: clone-x-dpc
+        run: gradle :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Verify APK
         run: |
-          sed -i 's/<string name="app_name">MaxCloner<\\//<string name="app_name">CLONE X<\\//' app/src/main/res/values/strings.xml
-          sed -i 's/applicationId "com.maxcloner.app"/applicationId "app.clonex"/' app/build.gradle
-          sed -i 's#"/data/data/com.maxcloner.app"#"/data/data/app.clonex"#' Bcore/src/main/cpp/Utils/AntiDetection.cpp
-          grep -q 'applicationId "app.clonex"' app/build.gradle
-          grep -q 'app_name">CLONE X<' app/src/main/res/values/strings.xml
-      - name: Build CLONE X virtualized APKs
-        working-directory: clone-x-engine/upstream
-        run: |
-          chmod +x ./gradlew
-          ./gradlew :app:assembleRelease --no-daemon --stacktrace
-      - name: Publish CLONE X APKs
+          test -s clone-x-dpc/app/build/outputs/apk/debug/app-debug.apk
+          $ANDROID_HOME/build-tools/35.0.0/aapt dump badging clone-x-dpc/app/build/outputs/apk/debug/app-debug.apk | grep -E "package: name='app.clonex.profile'|application-label:'CLONE X'"
+
+      - name: Publish CLONE X APK
         uses: actions/upload-artifact@v4
         with:
-          name: CLONE-X-VIRTUAL-APK
-          path: clone-x-engine/upstream/app/build/outputs/apk/release/*.apk
+          name: CLONE-X-APK
+          path: clone-x-dpc/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
